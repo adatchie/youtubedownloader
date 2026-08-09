@@ -162,6 +162,15 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
         output_template,
     ]
 
+    pot_provider_url = os.getenv("YTDLP_POT_PROVIDER_URL", "").strip()
+    if pot_provider_url:
+        command.extend(
+            [
+                "--extractor-args",
+                f"youtubepot-bgutilhttp:base_url={pot_provider_url}",
+            ]
+        )
+
     if media_format == "mp4":
         command.extend(
             [

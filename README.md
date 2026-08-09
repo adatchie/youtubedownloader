@@ -35,6 +35,8 @@ docker run --rm -p 10000:10000 -e PORT=10000 youtubedownloader
 
 GitHub Pagesのデプロイにはリポジトリ変数 `MEDIA_API_BASE_URL`（例: `https://api.example.com`）が必要です。Pagesのworkflowがこの値を `api-config.js` に埋め込みます。APIの公開元はHTTPSのオリジンだけを指定してください。
 
+YouTube側の自動取得制限に対応する公開環境では、`bgutil-ytdlp-pot-provider` のHTTPサーバーを同じDockerネットワークで動かし、APIコンテナに `YTDLP_POT_PROVIDER_URL=http://bgutil-provider:4416` を設定します。これは取得制限を必ず回避するものではなく、動画の公開状態や利用許諾を判定する機能ではありません。
+
 アプリケーションは動画URLをDBや作業ログへ保存しません。取得・変換中だけ一時ディレクトリを使い、レスポンス後に削除します。ホスティング基盤のアクセスログは別途そのサービスの設定に従います。
 
 ## 使い方

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from server import RequestError, build_ytdlp_command, classify_downloader_error, find_output_file, validate_youtube_url
@@ -76,6 +77,21 @@ class DownloaderCommandTests(unittest.TestCase):
         self.assertIn("--extract-audio", command)
         self.assertIn("--audio-format", command)
         self.assertIn("mp3", command)
+
+    def test_command_uses_configured_pot_provider(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"YTDLP_POT_PROVIDER_URL": "http://bgutil-provider:4416"}
+        ):
+            command = build_ytdlp_command(
+                "https://youtu.be/BaW_jenozKc",
+                "mp3",
+                Path(directory),
+            )
+
+        self.assertIn(
+            "youtubepot-bgutilhttp:base_url=http://bgutil-provider:4416",
+            command,
+        )
 
     def test_classifies_youtube_bot_check_separately_from_restricted_videos(self):
         code, message = classify_downloader_error("Sign in to confirm you're not a bot")
