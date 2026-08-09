@@ -695,69 +695,6 @@ a {
   font-size: 10px !important;
 }
 
-.progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 520px;
-  margin-top: 15px;
-}
-
-.progress-track {
-  position: relative;
-  width: min(100%, 430px);
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(23, 56, 56, 0.12);
-}
-
-.progress-track span {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent-deep);
-  transition: width 180ms ease;
-}
-
-.progress-label {
-  min-width: 34px;
-  color: var(--accent-deep);
-  font-family: var(--display);
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 35px;
-  margin-top: 15px;
-  padding: 0 13px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.66);
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.secondary-button:hover,
-.secondary-button:focus-visible {
-  border-color: var(--accent-deep);
-  color: var(--ink);
-  background: var(--paper-strong);
-}
-
-.secondary-button:focus-visible {
-  outline: 3px solid rgba(185, 242, 123, 0.7);
-  outline-offset: 2px;
-}
-
-.fallback-link,
 .text-link {
   display: inline-flex;
   margin-top: 11px;
@@ -768,7 +705,6 @@ a {
   text-underline-offset: 3px;
 }
 
-.fallback-link:hover,
 .text-link:hover {
   color: var(--ink);
 }
@@ -958,12 +894,6 @@ a {
 
   .status-panel {
     padding: 21px;
-  }
-
-  .progress-wrap {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
   }
 
   .principles {

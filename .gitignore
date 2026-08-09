@@ -2,6 +2,8 @@
 .DS_Store
 Thumbs.db
 *.log
+.venv/
+__pycache__/
 
 # Local secrets and environment overrides
 .env

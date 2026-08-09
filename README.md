@@ -1,39 +1,52 @@
 # まっすぐ保存
 
-権利フリー・利用許諾済みのメディア直リンクを、ブラウザに保存依頼する静的HTMLツールです。MP4→MP3変換はWebAssembly版FFmpegで端末内処理します。
+権利フリー・利用許諾済みのYouTube動画ページURLを、サーバー側でMP4またはMP3として取得するWebツールです。画面はFastAPIが配信し、yt-dlpとFFmpegがサーバー内で処理します。
 
-## GitHub Pages
+## 対応範囲
 
-`main` ブランチへ push すると、GitHub Actions がこのフォルダを静的サイトとしてGitHub Pagesへデプロイします。公開先は次のURLです。
+- 対応URL: `youtube.com` / `youtu.be` の1本の公開動画ページ
+- 対応形式: MP4、MP3
+- 非対応: Playlist、チャンネル、検索URL、ログイン必須動画、DRM動画、ライブ配信の特殊形式
+- 上限: 1リクエスト256MiB、同時処理2件、処理時間5分
 
-https://adatchie.github.io/youtubedownloader/
+動画ページURLだけでは著作権やライセンスを判定できません。著作権フリー、パブリックドメイン、または利用許諾を得た素材だけに使ってください。
+
+## 動かし方
+
+`index.html` を直接開く方式ではありません。FastAPIサーバーから開いてください。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn server:app --host 127.0.0.1 --port 8000
+```
+
+ブラウザで <http://127.0.0.1:8000/> を開きます。FFmpegがPATHに必要です。
+
+## Docker / Render
+
+ルートの `Dockerfile` と `render.yaml` はRender Web Service用です。Render DashboardでこのGitHubリポジトリを選び、BlueprintまたはDocker Web Serviceとして作成してください。Renderが`PORT`を渡し、`/healthz`をヘルスチェックします。
+
+```powershell
+docker build -t youtubedownloader .
+docker run --rm -p 10000:10000 -e PORT=10000 youtubedownloader
+```
+
+アプリケーションは動画URLをDBや作業ログへ保存しません。取得・変換中だけ一時ディレクトリを使い、レスポンス後に削除します。Renderなどホスティング基盤のアクセスログは別途そのサービスの設定に従います。
 
 ## 使い方
 
-1. `index.html` をブラウザで直接開く
-2. MP4またはMP3ファイルそのもののURLを入力する
-3. MP4をそのまま保存するか、MP4からMP3へ変換するかを選ぶ
-4. 利用権限の確認にチェックを入れて「保存準備をする」を押す
-
-アプリケーションサーバー、広告SDK、アクセス解析は使っていません。HTTP(S)で開いた場合は変換エンジンをローカルの `vendor/ffmpeg` から読み込みます。`file://` で直接開いた場合だけ、ブラウザのWorker制約を避けるため固定バージョンのFFmpegコアをHTTPSから取得し、SHA-256検証後にBlob Workerへ渡します。MP4の内容や入力URLをそのコア配布元へ送信する処理はありません。
-
-## 開き方による違い
-
-- `index.html` を直接開く: 直リンクのMP4/MP3保存と、MP4→MP3変換が使えます。変換時は固定コア取得のためインターネット接続が必要です。
-- 静的HTTP(S)で公開して開く: 同梱コアを使うため、変換コアの外部取得は不要です。GitHub Pages等の静的ホスティングでも動かせます。
+1. YouTubeの公開動画ページURLを入力する
+2. MP4またはMP3を選ぶ
+3. 利用権限の確認にチェックを入れて「ダウンロードする」を押す
 
 ## できること / できないこと
 
-- できること: 公開された `.mp4` / `.mp3` の直接配布URLを、配布元のレスポンスに従って保存する
-- できること: CORSを許可したMP4直リンクから、端末内で音声を抽出してMP3を作る
-- できないこと: YouTube等の動画ページURLの解析、ログイン制限やDRMの回避、ストリーミングの分割取得
-- 制限: MP4→MP3変換の入力上限は256MiB。ブラウザのメモリや端末性能によって変換時間は変わる
-- 制限: 変換元の配布元が `Access-Control-Allow-Origin` でブラウザからの取得を許可している必要がある
-
-クロスオリジンのURLでは、配布元がダウンロードレスポンスを許可していないとブラウザが自動保存を拒否することがあります。その場合は表示される「ソースURLを開く」リンクから、配布元の正規の保存操作を使ってください。MP4→MP3変換でCORSエラーになる場合は、直リンク側の設定を変えない限り静的HTMLだけでは回避できません。
-
-URLだけでは著作権やライセンスを判定できません。利用条件は必ず配布元で確認し、著作権フリー、パブリックドメイン、または利用許諾を得た素材だけに使ってください。
+- できること: YouTube / youtu.beの公開動画ページから、サーバー側でMP4またはMP3を作成する
+- できないこと: ログイン制限・DRM・Playlist・チャンネル・検索URLの回避や処理
+- できないこと: 任意ホストのURLをサーバーから取得すること
 
 ## 同梱ライセンス
 
-`vendor/ffmpeg` には `@ffmpeg/ffmpeg` 0.12.15 と `@ffmpeg/core` 0.12.10 のUMD/WASM実行ファイルを同梱しています。`file://` 用の固定コア取得元とハッシュも含め、詳細は [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) を確認してください。
+サーバー側依存関係のライセンスは [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) を確認してください。

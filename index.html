@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#eef3ee">
     <meta name="referrer" content="no-referrer">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' http: https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
     <title>まっすぐ保存 — 権利フリー素材のダウンロード</title>
     <link rel="stylesheet" href="./styles.css">
-    <script src="./vendor/ffmpeg/ffmpeg.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
   <body>
@@ -23,7 +22,7 @@
         </a>
         <div class="local-badge">
           <span class="status-dot" aria-hidden="true"></span>
-          このページだけで動作
+          サーバーで安全に処理
         </div>
       </header>
 
@@ -32,14 +31,14 @@
           <div class="eyebrow"><span aria-hidden="true"></span>NO TRACKING / NO ADWARE</div>
           <h1 id="hero-title">必要なメディアだけ、<br><em>まっすぐ保存。</em></h1>
           <p class="hero-lede">
-            権利フリー・利用許諾済みの<strong>直接配布URL</strong>を、
-            MP4またはMP3としてブラウザに渡します。MP4からMP3への変換も、
-            変換元のメディアを外へ出さずブラウザ内で行います。
+            権利フリー・利用許諾済みの<strong>YouTube動画ページURL</strong>を、
+            サーバー側でMP4またはMP3として取得します。Playlistやログイン必須の動画、
+            DRMで保護された動画は扱いません。
           </p>
           <div class="hero-notes" aria-label="このツールの特徴">
-            <span><b>01</b> URLを外部サービスへ送らない</span>
+            <span><b>01</b> URLは処理後に保存しない</span>
             <span><b>02</b> 広告・追跡スクリプトなし</span>
-            <span><b>03</b> ページURLの解析や制限回避をしない</span>
+            <span><b>03</b> 対応サイトを許可リストで制限</span>
           </div>
         </section>
 
@@ -47,16 +46,16 @@
           <div class="panel-heading">
             <div>
               <span class="section-kicker">STEP 01 / SOURCE</span>
-              <h2 id="tool-title">素材の直リンクを入力</h2>
+              <h2 id="tool-title">動画ページURLを入力</h2>
             </div>
-            <span class="privacy-chip"><span aria-hidden="true">✦</span> 入力値はこのページ内だけ</span>
+            <span class="privacy-chip"><span aria-hidden="true">✦</span> 処理後にURLを保存しない</span>
           </div>
 
           <form id="download-form" novalidate>
             <div class="field-group">
               <div class="label-line">
-                <label for="media-url">メディアURL</label>
-                <span>HTTP / HTTPS</span>
+                <label for="media-url">動画ページURL</label>
+                <span>YouTube / youtu.be</span>
               </div>
               <div class="url-input-wrap">
                 <span class="url-prefix" aria-hidden="true">↗</span>
@@ -67,20 +66,20 @@
                   inputmode="url"
                   autocomplete="url"
                   spellcheck="false"
-                  placeholder="https://example.org/video.mp4"
+                  placeholder="https://www.youtube.com/watch?v=..."
                   aria-describedby="url-help url-error"
                   required
                 >
                 <button class="clear-button" id="clear-url" type="button" aria-label="URLを消去" hidden>×</button>
               </div>
-              <p class="field-help" id="url-help">動画ページではなく、パス末尾が .mp4 または .mp3 のファイル直リンクを使ってください。MP4→MP3変換にはCORS許可も必要です。</p>
+              <p class="field-help" id="url-help">YouTubeまたはyoutu.beの公開動画ページURLを入力してください。Playlist・チャンネル・検索URL・ログイン必須動画には対応していません。</p>
               <p class="field-error" id="url-error" role="alert" hidden></p>
             </div>
 
             <fieldset class="format-fieldset">
               <legend>
                 保存形式
-                <span>MP3を選ぶとMP4から音声を抽出</span>
+                <span>サーバー側で取得・変換</span>
               </legend>
               <div class="format-grid">
                 <label class="format-option">
@@ -104,7 +103,7 @@
 
             <div class="file-preview" aria-live="polite">
               <span class="preview-label">保存名の目安</span>
-              <code id="file-name-preview">media.mp4</code>
+              <code id="file-name-preview">video.mp4</code>
             </div>
 
             <label class="rights-confirmation" for="rights-confirm">
@@ -114,11 +113,11 @@
             </label>
 
             <button class="primary-button" id="download-button" type="submit" disabled>
-              <span>保存準備をする</span>
+              <span>ダウンロードする</span>
               <span class="button-arrow" aria-hidden="true">→</span>
             </button>
 
-            <p class="form-footnote"><span aria-hidden="true">ⓘ</span> 入力したURLを保存・広告配信に利用するサーバーはありません。変換エンジンは初回のみ約32MB読み込みます。</p>
+            <p class="form-footnote"><span aria-hidden="true">ⓘ</span> URLと変換途中のファイルは処理後に保存しません。サーバー側のyt-dlpとFFmpegで処理します。</p>
           </form>
         </section>
 
@@ -129,14 +128,6 @@
             <h2 id="status-title">準備ができました</h2>
             <p id="status-message"></p>
             <p class="status-meta" id="status-meta"></p>
-            <div class="progress-wrap" id="progress-wrap" hidden>
-              <div class="progress-track" role="progressbar" aria-label="変換の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                <span id="progress-bar"></span>
-              </div>
-              <span class="progress-label" id="progress-label">0%</span>
-            </div>
-            <button class="secondary-button" id="cancel-conversion" type="button" hidden>変換を中止</button>
-            <a class="fallback-link" id="fallback-link" href="#" target="_blank" rel="noopener noreferrer" hidden>ソースURLを開く ↗</a>
           </div>
         </section>
 
@@ -149,22 +140,22 @@
             <article class="principle-card">
               <span class="principle-number">01</span>
               <div>
-                <h3>URLは外へ送らない</h3>
-                <p>入力値を受け取るバックエンド、広告タグ、解析SDKを置かず、このHTMLとブラウザだけで動かします。</p>
+                <h3>URLは処理後に保存しない</h3>
+                <p>動画ページURLは取得処理のためサーバーへ送信しますが、ログやデータベースには保存しません。</p>
               </div>
             </article>
             <article class="principle-card">
               <span class="principle-number">02</span>
               <div>
-                <h3>直リンクだけを扱う</h3>
-                <p>動画ページの解析、ログイン制限の回避、ストリーミングの分割取得は行いません。配布元のルールを尊重します。</p>
+                <h3>YouTubeの公開動画だけ</h3>
+                <p>YouTubeとyoutu.beの1本の公開動画ページに限定し、Playlist・ログイン制限・DRMの回避は行いません。</p>
               </div>
             </article>
             <article class="principle-card">
               <span class="principle-number">03</span>
               <div>
-                <h3>変換もブラウザ内で</h3>
-                <p>MP4をMP3へ変換するときも、WebAssembly版FFmpegが端末上で処理します。変換元の映像は外部サーバーへ送信しません。</p>
+                <h3>サーバー側で一時処理</h3>
+                <p>サーバー上のyt-dlpとFFmpegで取得・変換し、完了後に一時ファイルを削除してブラウザへ返します。</p>
               </div>
             </article>
           </div>
@@ -173,15 +164,15 @@
         <section class="usage-note" aria-labelledby="usage-title">
           <div class="note-mark" aria-hidden="true">!</div>
           <div>
-            <h2 id="usage-title">使えるURLについて</h2>
-            <p>対象は、権利フリー素材サイトなどが公開しているMP4/MP3の直接配布URLです。MP4→MP3変換では配布元がCORSを許可している必要があります。URLだけではライセンスを確認できないため、利用条件は必ず配布元で確認してください。</p>
+            <h2 id="usage-title">使える動画URLについて</h2>
+            <p>対象は、YouTubeまたはyoutu.beが公開している1本の動画ページURLです。動画ページURLだけではライセンスを確認できないため、利用条件は必ず確認し、著作権フリー、パブリックドメイン、または利用許諾を得た素材だけに使ってください。</p>
           </div>
           <a href="#tool-title" class="text-link">入力欄へ戻る ↑</a>
         </section>
       </main>
 
       <footer class="site-footer">
-        <span>まっすぐ保存 / STATIC BY DESIGN</span>
+        <span>まっすぐ保存 / SERVER BY DESIGN</span>
         <span>広告なし · 追跡なし · 権利尊重</span>
       </footer>
     </div>
