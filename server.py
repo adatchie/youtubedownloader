@@ -175,7 +175,7 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
         command.extend(
             [
                 "--format",
-                "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+                "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]",
                 "--merge-output-format",
                 "mp4",
                 "--remux-video",
