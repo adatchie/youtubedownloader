@@ -357,3 +357,8 @@ async def styles() -> FileResponse:
 @app.get("/app.js")
 async def script() -> FileResponse:
     return FileResponse(ROOT / "app.js", media_type="application/javascript; charset=utf-8")
+
+
+@app.get("/api-config.js")
+async def api_config() -> FileResponse:
+    return FileResponse(ROOT / "api-config.js", media_type="application/javascript; charset=utf-8")

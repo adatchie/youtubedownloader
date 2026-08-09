@@ -24,16 +24,18 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 ブラウザで <http://127.0.0.1:8000/> を開きます。FFmpegがPATHに必要です。
 
-## Docker / Render
+## Docker / 公開
 
-ルートの `Dockerfile` と `render.yaml` はRender Web Service用です。Render DashboardでこのGitHubリポジトリを選び、BlueprintまたはDocker Web Serviceとして作成してください。Renderが`PORT`を渡し、`/healthz`をヘルスチェックします。
+ルートの `Dockerfile` は、FFmpegを含むFastAPIサーバーを起動します。公開環境では、フロントエンドのGitHub Pagesから `ALLOWED_ORIGINS=https://adatchie.github.io` を設定したHTTPSのDockerホストへ接続します。
 
 ```powershell
 docker build -t youtubedownloader .
 docker run --rm -p 10000:10000 -e PORT=10000 youtubedownloader
 ```
 
-アプリケーションは動画URLをDBや作業ログへ保存しません。取得・変換中だけ一時ディレクトリを使い、レスポンス後に削除します。Renderなどホスティング基盤のアクセスログは別途そのサービスの設定に従います。
+GitHub Pagesのデプロイにはリポジトリ変数 `MEDIA_API_BASE_URL`（例: `https://api.example.com`）が必要です。Pagesのworkflowがこの値を `api-config.js` に埋め込みます。APIの公開元はHTTPSのオリジンだけを指定してください。
+
+アプリケーションは動画URLをDBや作業ログへ保存しません。取得・変換中だけ一時ディレクトリを使い、レスポンス後に削除します。ホスティング基盤のアクセスログは別途そのサービスの設定に従います。
 
 ## 使い方
 

@@ -18,6 +18,9 @@
   const statusMeta = document.querySelector("#status-meta");
 
   const MAX_URL_LENGTH = 2048;
+  const configuredApiBaseUrl = typeof window.MEDIA_API_BASE_URL === "string"
+    ? window.MEDIA_API_BASE_URL.trim().replace(/\/+$/, "")
+    : "";
   const YOUTUBE_HOSTS = new Set([
     "youtube.com",
     "www.youtube.com",
@@ -200,7 +203,7 @@
     });
 
     try {
-      const response = await fetch("/api/download", {
+      const response = await fetch(`${configuredApiBaseUrl}/api/download`, {
         method: "POST",
         headers: {
           Accept: "application/octet-stream, application/json",

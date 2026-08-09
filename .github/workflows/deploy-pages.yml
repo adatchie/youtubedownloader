@@ -1,0 +1,54 @@
+name: Deploy static site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out site
+        uses: actions/checkout@v4
+
+      - name: Configure API endpoint
+        env:
+          API_BASE_URL: ${{ vars.MEDIA_API_BASE_URL }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const raw = (process.env.API_BASE_URL || "").trim();
+          if (!raw) {
+            throw new Error("MEDIA_API_BASE_URL repository variable is required");
+          }
+          const url = new URL(raw);
+          if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+            throw new Error("MEDIA_API_BASE_URL must be an HTTPS origin without a path");
+          }
+          fs.writeFileSync("api-config.js", `window.MEDIA_API_BASE_URL = ${JSON.stringify(raw.replace(/\/+$/, ""))};\n`);
+          NODE
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
