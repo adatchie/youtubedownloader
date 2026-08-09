@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from server import RequestError, build_ytdlp_command, find_output_file, validate_youtube_url
+from server import RequestError, build_ytdlp_command, classify_downloader_error, find_output_file, validate_youtube_url
 
 
 class YouTubeUrlValidationTests(unittest.TestCase):
@@ -60,6 +60,8 @@ class DownloaderCommandTests(unittest.TestCase):
 
         self.assertIsInstance(command, list)
         self.assertIn("--no-playlist", command)
+        extractor_args_index = command.index("--extractor-args")
+        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=tv_embedded,android_vr")
         self.assertIn("--merge-output-format", command)
         self.assertEqual(command[-1], "https://www.youtube.com/watch?v=BaW_jenozKc")
 
@@ -74,6 +76,11 @@ class DownloaderCommandTests(unittest.TestCase):
         self.assertIn("--extract-audio", command)
         self.assertIn("--audio-format", command)
         self.assertIn("mp3", command)
+
+    def test_classifies_youtube_bot_check_separately_from_restricted_videos(self):
+        code, message = classify_downloader_error("Sign in to confirm you're not a bot")
+        self.assertEqual(code, "youtube-bot-check")
+        self.assertIn("時間を置いて", message)
 
 
 class OutputPathTests(unittest.TestCase):

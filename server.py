@@ -152,6 +152,8 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
         "2",
         "--fragment-retries",
         "2",
+        "--extractor-args",
+        "youtube:player_client=tv_embedded,android_vr",
         "--max-filesize",
         "256M",
         "--print",
@@ -192,6 +194,8 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
 
 def classify_downloader_error(stderr: str) -> tuple[str, str]:
     message = stderr.lower()
+    if "confirm you're not a bot" in message or "confirm you’re not a bot" in message:
+        return "youtube-bot-check", "YouTube側の自動取得制限により処理できませんでした。時間を置いて再試行してください。"
     if "private video" in message or "sign in" in message or "login" in message:
         return "restricted-video", "非公開またはログインが必要な動画には対応していません。"
     if "drm" in message or "protected" in message:
