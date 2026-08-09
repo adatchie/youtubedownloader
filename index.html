@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#eef3ee">
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' http: https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>まっすぐ保存 — 権利フリー素材のダウンロード</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./vendor/ffmpeg/ffmpeg.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="まっすぐ保存 ホーム">
+          <span class="brand-mark" aria-hidden="true">↓</span>
+          <span class="brand-copy">
+            <strong>まっすぐ保存</strong>
+            <small>RIGHTS-FIRST MEDIA TOOL</small>
+          </span>
+        </a>
+        <div class="local-badge">
+          <span class="status-dot" aria-hidden="true"></span>
+          このページだけで動作
+        </div>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="eyebrow"><span aria-hidden="true"></span>NO TRACKING / NO ADWARE</div>
+          <h1 id="hero-title">必要なメディアだけ、<br><em>まっすぐ保存。</em></h1>
+          <p class="hero-lede">
+            権利フリー・利用許諾済みの<strong>直接配布URL</strong>を、
+            MP4またはMP3としてブラウザに渡します。MP4からMP3への変換も、
+            変換元のメディアを外へ出さずブラウザ内で行います。
+          </p>
+          <div class="hero-notes" aria-label="このツールの特徴">
+            <span><b>01</b> URLを外部サービスへ送らない</span>
+            <span><b>02</b> 広告・追跡スクリプトなし</span>
+            <span><b>03</b> ページURLの解析や制限回避をしない</span>
+          </div>
+        </section>
+
+        <section class="download-panel" aria-labelledby="tool-title">
+          <div class="panel-heading">
+            <div>
+              <span class="section-kicker">STEP 01 / SOURCE</span>
+              <h2 id="tool-title">素材の直リンクを入力</h2>
+            </div>
+            <span class="privacy-chip"><span aria-hidden="true">✦</span> 入力値はこのページ内だけ</span>
+          </div>
+
+          <form id="download-form" novalidate>
+            <div class="field-group">
+              <div class="label-line">
+                <label for="media-url">メディアURL</label>
+                <span>HTTP / HTTPS</span>
+              </div>
+              <div class="url-input-wrap">
+                <span class="url-prefix" aria-hidden="true">↗</span>
+                <input
+                  id="media-url"
+                  name="media-url"
+                  type="url"
+                  inputmode="url"
+                  autocomplete="url"
+                  spellcheck="false"
+                  placeholder="https://example.org/video.mp4"
+                  aria-describedby="url-help url-error"
+                  required
+                >
+                <button class="clear-button" id="clear-url" type="button" aria-label="URLを消去" hidden>×</button>
+              </div>
+              <p class="field-help" id="url-help">動画ページではなく、パス末尾が .mp4 または .mp3 のファイル直リンクを使ってください。MP4→MP3変換にはCORS許可も必要です。</p>
+              <p class="field-error" id="url-error" role="alert" hidden></p>
+            </div>
+
+            <fieldset class="format-fieldset">
+              <legend>
+                保存形式
+                <span>MP3を選ぶとMP4から音声を抽出</span>
+              </legend>
+              <div class="format-grid">
+                <label class="format-option">
+                  <input type="radio" name="format" value="mp4" checked>
+                  <span class="format-card">
+                    <span class="format-icon">MP4</span>
+                    <span class="format-copy"><strong>動画</strong><small>映像 + 音声</small></span>
+                    <span class="radio-indicator" aria-hidden="true"></span>
+                  </span>
+                </label>
+                <label class="format-option">
+                  <input type="radio" name="format" value="mp3">
+                  <span class="format-card">
+                    <span class="format-icon audio">MP3</span>
+                    <span class="format-copy"><strong>音楽</strong><small>音声のみ</small></span>
+                    <span class="radio-indicator" aria-hidden="true"></span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="file-preview" aria-live="polite">
+              <span class="preview-label">保存名の目安</span>
+              <code id="file-name-preview">media.mp4</code>
+            </div>
+
+            <label class="rights-confirmation" for="rights-confirm">
+              <input id="rights-confirm" type="checkbox">
+              <span class="custom-check" aria-hidden="true">✓</span>
+              <span>この素材は、著作権フリー・パブリックドメイン、または私が利用許諾を得ています。</span>
+            </label>
+
+            <button class="primary-button" id="download-button" type="submit" disabled>
+              <span>保存準備をする</span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+
+            <p class="form-footnote"><span aria-hidden="true">ⓘ</span> 入力したURLを保存・広告配信に利用するサーバーはありません。変換エンジンは初回のみ約32MB読み込みます。</p>
+          </form>
+        </section>
+
+        <section class="status-panel" id="status-panel" data-state="idle" aria-live="polite" hidden>
+          <div class="status-icon" id="status-icon" aria-hidden="true">✓</div>
+          <div class="status-copy">
+            <span class="section-kicker" id="status-kicker">READY</span>
+            <h2 id="status-title">準備ができました</h2>
+            <p id="status-message"></p>
+            <p class="status-meta" id="status-meta"></p>
+            <div class="progress-wrap" id="progress-wrap" hidden>
+              <div class="progress-track" role="progressbar" aria-label="変換の進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span id="progress-bar"></span>
+              </div>
+              <span class="progress-label" id="progress-label">0%</span>
+            </div>
+            <button class="secondary-button" id="cancel-conversion" type="button" hidden>変換を中止</button>
+            <a class="fallback-link" id="fallback-link" href="#" target="_blank" rel="noopener noreferrer" hidden>ソースURLを開く ↗</a>
+          </div>
+        </section>
+
+        <section class="principles" aria-labelledby="principles-title">
+          <div class="section-intro">
+            <span class="section-kicker">WHY THIS TOOL</span>
+            <h2 id="principles-title">安全に使うための<br>3つの約束</h2>
+          </div>
+          <div class="principle-list">
+            <article class="principle-card">
+              <span class="principle-number">01</span>
+              <div>
+                <h3>URLは外へ送らない</h3>
+                <p>入力値を受け取るバックエンド、広告タグ、解析SDKを置かず、このHTMLとブラウザだけで動かします。</p>
+              </div>
+            </article>
+            <article class="principle-card">
+              <span class="principle-number">02</span>
+              <div>
+                <h3>直リンクだけを扱う</h3>
+                <p>動画ページの解析、ログイン制限の回避、ストリーミングの分割取得は行いません。配布元のルールを尊重します。</p>
+              </div>
+            </article>
+            <article class="principle-card">
+              <span class="principle-number">03</span>
+              <div>
+                <h3>変換もブラウザ内で</h3>
+                <p>MP4をMP3へ変換するときも、WebAssembly版FFmpegが端末上で処理します。変換元の映像は外部サーバーへ送信しません。</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="usage-note" aria-labelledby="usage-title">
+          <div class="note-mark" aria-hidden="true">!</div>
+          <div>
+            <h2 id="usage-title">使えるURLについて</h2>
+            <p>対象は、権利フリー素材サイトなどが公開しているMP4/MP3の直接配布URLです。MP4→MP3変換では配布元がCORSを許可している必要があります。URLだけではライセンスを確認できないため、利用条件は必ず配布元で確認してください。</p>
+          </div>
+          <a href="#tool-title" class="text-link">入力欄へ戻る ↑</a>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>まっすぐ保存 / STATIC BY DESIGN</span>
+        <span>広告なし · 追跡なし · 権利尊重</span>
+      </footer>
+    </div>
+  </body>
+</html>

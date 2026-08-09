@@ -1,0 +1,12 @@
+# Local tooling and OS files
+.DS_Store
+Thumbs.db
+*.log
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Temporary files used during local verification
+__codex_*
