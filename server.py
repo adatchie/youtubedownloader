@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,8 @@ import tempfile
 import threading
 import time
 from collections import defaultdict, deque
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
@@ -28,6 +31,7 @@ MAX_URL_LENGTH = 2048
 MAX_FILE_BYTES = 256 * 1024 * 1024
 DOWNLOAD_TIMEOUT_SECONDS = 300
 MAX_CONCURRENT_DOWNLOADS = 2
+JOB_RETENTION_SECONDS = 15 * 60
 RATE_LIMIT_WINDOW_SECONDS = 60
 RATE_LIMIT_REQUESTS = 3
 
@@ -45,6 +49,12 @@ VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
 DOWNLOAD_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_DOWNLOADS)
 RATE_LIMIT_LOCK = threading.Lock()
 RATE_LIMIT_HISTORY: dict[str, deque[float]] = defaultdict(deque)
+JOB_LOCK = threading.Lock()
+DOWNLOAD_JOBS: dict[str, "DownloadJob"] = {}
+JOB_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MAX_CONCURRENT_DOWNLOADS,
+    thread_name_prefix="media-download",
+)
 LOGGER = logging.getLogger("youtubedownloader")
 
 
@@ -54,6 +64,18 @@ class RequestError(Exception):
         self.code = code
         self.message = message
         self.status_code = status_code
+
+
+@dataclass
+class DownloadJob:
+    job_id: str
+    media_format: Literal["mp4", "mp3"]
+    created_at: float
+    status: Literal["queued", "processing", "ready", "failed", "delivering"] = "queued"
+    output_path: Path | None = None
+    work_dir: Path | None = None
+    error: RequestError | None = None
+    finished_at: float | None = None
 
 
 class DownloadRequest(BaseModel):
@@ -240,8 +262,13 @@ def remove_work_dir(work_dir: str) -> None:
     shutil.rmtree(work_dir, ignore_errors=True)
 
 
-def download_media(url: str, media_format: str) -> tuple[Path, Path]:
-    if not DOWNLOAD_SLOTS.acquire(blocking=False):
+def download_media(
+    url: str,
+    media_format: str,
+    *,
+    slot_acquired: bool = False,
+) -> tuple[Path, Path]:
+    if not slot_acquired and not DOWNLOAD_SLOTS.acquire(blocking=False):
         raise RequestError(
             "busy",
             "現在ほかの変換処理が実行中です。少し待ってから再試行してください。",
@@ -294,7 +321,135 @@ def download_media(url: str, media_format: str) -> tuple[Path, Path]:
         LOGGER.exception("failed to start or run yt-dlp")
         raise RequestError("server-error", "変換サーバーを起動できませんでした。", 500) from None
     finally:
+        if not slot_acquired:
+            DOWNLOAD_SLOTS.release()
+
+
+def prune_download_jobs() -> None:
+    now = time.monotonic()
+    expired_work_dirs: list[Path] = []
+    with JOB_LOCK:
+        expired_ids = [
+            job_id
+            for job_id, job in DOWNLOAD_JOBS.items()
+            if job.finished_at is not None
+            and job.status in {"ready", "failed"}
+            and now - job.finished_at >= JOB_RETENTION_SECONDS
+        ]
+        for job_id in expired_ids:
+            job = DOWNLOAD_JOBS.pop(job_id)
+            if job.work_dir is not None:
+                expired_work_dirs.append(job.work_dir)
+
+    for work_dir in expired_work_dirs:
+        remove_work_dir(str(work_dir))
+
+
+def serialize_download_job(job: DownloadJob) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "job_id": job.job_id,
+        "format": job.media_format,
+        "status": job.status,
+        "status_url": f"/api/download-jobs/{job.job_id}",
+        "download_url": None,
+        "error": None,
+    }
+    if job.status == "ready":
+        payload["download_url"] = f"/api/download-jobs/{job.job_id}/file"
+    if job.error is not None:
+        payload["error"] = {"code": job.error.code, "message": job.error.message}
+    return payload
+
+
+def run_download_job(job_id: str, url: str, media_format: str) -> None:
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.get(job_id)
+        if job is None:
+            DOWNLOAD_SLOTS.release()
+            return
+        job.status = "processing"
+
+    try:
+        output_path, work_dir = download_media(url, media_format, slot_acquired=True)
+    except RequestError as error:
+        with JOB_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job is not None:
+                job.status = "failed"
+                job.error = error
+                job.finished_at = time.monotonic()
+    except Exception:
+        LOGGER.exception("download job failed unexpectedly: job_id=%s", job_id)
+        error = RequestError("server-error", "変換サーバーで予期しないエラーが発生しました。", 500)
+        with JOB_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job is not None:
+                job.status = "failed"
+                job.error = error
+                job.finished_at = time.monotonic()
+    else:
+        with JOB_LOCK:
+            job = DOWNLOAD_JOBS.get(job_id)
+            if job is not None:
+                job.status = "ready"
+                job.output_path = output_path
+                job.work_dir = work_dir
+                job.finished_at = time.monotonic()
+    finally:
         DOWNLOAD_SLOTS.release()
+
+
+def start_download_job(url: str, media_format: Literal["mp4", "mp3"]) -> DownloadJob:
+    prune_download_jobs()
+    if not DOWNLOAD_SLOTS.acquire(blocking=False):
+        raise RequestError(
+            "busy",
+            "現在ほかの変換処理が実行中です。少し待ってから再試行してください。",
+            429,
+        )
+
+    job = DownloadJob(
+        job_id=secrets.token_urlsafe(18),
+        media_format=media_format,
+        created_at=time.monotonic(),
+    )
+    with JOB_LOCK:
+        DOWNLOAD_JOBS[job.job_id] = job
+
+    try:
+        JOB_EXECUTOR.submit(run_download_job, job.job_id, url, media_format)
+    except Exception:
+        with JOB_LOCK:
+            DOWNLOAD_JOBS.pop(job.job_id, None)
+        DOWNLOAD_SLOTS.release()
+        LOGGER.exception("failed to queue download job: job_id=%s", job.job_id)
+        raise RequestError("server-error", "変換処理を開始できませんでした。", 500) from None
+    return job
+
+
+def validate_download_request(request: Request, payload: DownloadRequest) -> str:
+    if not payload.rights_confirmed:
+        raise RequestError(
+            "rights-required",
+            "著作権フリー、パブリックドメイン、または利用許諾済みの素材だけ使用してください。",
+        )
+
+    normalized_url = validate_youtube_url(payload.url)
+    client_key = request.client.host if request.client else "unknown"
+    enforce_rate_limit(client_key)
+    return normalized_url
+
+
+def media_response_details(media_format: str) -> tuple[str, str]:
+    if media_format == "mp4":
+        return "video.mp4", "video/mp4"
+    return "audio.mp3", "audio/mpeg"
+
+
+def finish_download_job(job_id: str, work_dir: str) -> None:
+    remove_work_dir(work_dir)
+    with JOB_LOCK:
+        DOWNLOAD_JOBS.pop(job_id, None)
 
 
 app = FastAPI(
@@ -329,26 +484,69 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/download-jobs", status_code=202)
+async def create_download_job(request: Request, payload: DownloadRequest):
+    try:
+        normalized_url = validate_download_request(request, payload)
+        job = start_download_job(normalized_url, payload.format)
+    except RequestError as error:
+        return error_response(error)
+
+    with JOB_LOCK:
+        return JSONResponse(status_code=202, content=serialize_download_job(job))
+
+
+@app.get("/api/download-jobs/{job_id}")
+async def download_job_status(job_id: str):
+    prune_download_jobs()
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.get(job_id)
+        if job is None:
+            return error_response(RequestError("job-not-found", "変換処理が見つかりません。", 404))
+        return serialize_download_job(job)
+
+
+@app.get("/api/download-jobs/{job_id}/file")
+async def download_job_file(job_id: str):
+    prune_download_jobs()
+    with JOB_LOCK:
+        job = DOWNLOAD_JOBS.get(job_id)
+        if job is None:
+            return error_response(RequestError("job-not-found", "変換処理が見つかりません。", 404))
+        if job.status == "failed" and job.error is not None:
+            return error_response(job.error)
+        if job.status != "ready" or job.output_path is None or job.work_dir is None:
+            return error_response(
+                RequestError("job-not-ready", "変換処理がまだ完了していません。", 409)
+            )
+        if not job.output_path.is_file():
+            job.status = "failed"
+            job.error = RequestError("empty-output", "動画の出力ファイルを作成できませんでした。", 502)
+            job.finished_at = time.monotonic()
+            return error_response(job.error)
+
+        job.status = "delivering"
+        output_path = job.output_path
+        work_dir = job.work_dir
+        filename, media_type = media_response_details(job.media_format)
+
+    return FileResponse(
+        output_path,
+        media_type=media_type,
+        filename=filename,
+        background=BackgroundTask(finish_download_job, job_id, str(work_dir)),
+    )
+
+
 @app.post("/api/download")
 async def download(request: Request, payload: DownloadRequest):
-    if not payload.rights_confirmed:
-        return error_response(
-            RequestError(
-                "rights-required",
-                "著作権フリー、パブリックドメイン、または利用許諾済みの素材だけ使用してください。",
-            )
-        )
-
     try:
-        normalized_url = validate_youtube_url(payload.url)
-        client_key = request.client.host if request.client else "unknown"
-        enforce_rate_limit(client_key)
+        normalized_url = validate_download_request(request, payload)
         output_path, work_dir = await run_in_threadpool(download_media, normalized_url, payload.format)
     except RequestError as error:
         return error_response(error)
 
-    filename = f"video.{payload.format}" if payload.format == "mp4" else "audio.mp3"
-    media_type = "video/mp4" if payload.format == "mp4" else "audio/mpeg"
+    filename, media_type = media_response_details(payload.format)
     return FileResponse(
         output_path,
         media_type=media_type,

@@ -18,6 +18,8 @@
   const statusMeta = document.querySelector("#status-meta");
 
   const MAX_URL_LENGTH = 2048;
+  const JOB_POLL_INTERVAL_MS = 1000;
+  const JOB_POLL_TIMEOUT_MS = 330_000;
   const configuredApiBaseUrl = typeof window.MEDIA_API_BASE_URL === "string"
     ? window.MEDIA_API_BASE_URL.trim().replace(/\/+$/, "")
     : "";
@@ -190,6 +192,110 @@
     return "サーバーで動画を処理できませんでした。公開状態とURLを確認してください。";
   }
 
+  function apiUrl(path) {
+    return `${configuredApiBaseUrl}${path}`;
+  }
+
+  function sleepWithAbort(milliseconds, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("通信を中止しました。", "AbortError"));
+        return;
+      }
+
+      let timeoutId;
+      const onAbort = () => {
+        window.clearTimeout(timeoutId);
+        reject(new DOMException("通信を中止しました。", "AbortError"));
+      };
+      timeoutId = window.setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, milliseconds);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  async function createDownloadJob(validation, signal) {
+    const response = await fetch(apiUrl("/api/download-jobs"), {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        url: validation.url,
+        format: validation.format,
+        rights_confirmed: rightsCheckbox.checked
+      }),
+      signal
+    });
+
+    if (!response.ok) {
+      throw new Error(await readServerError(response));
+    }
+
+    const job = await response.json();
+    if (!job || typeof job.job_id !== "string") {
+      throw new Error("変換処理の受付結果を確認できませんでした。もう一度試してください。");
+    }
+    return job;
+  }
+
+  async function waitForDownloadJob(job, signal) {
+    const deadline = Date.now() + JOB_POLL_TIMEOUT_MS;
+    let currentJob = job;
+
+    while (currentJob.status === "queued" || currentJob.status === "processing") {
+      if (Date.now() >= deadline) {
+        throw new Error("変換処理が時間制限を超えました。短い動画で再試行してください。");
+      }
+
+      await sleepWithAbort(JOB_POLL_INTERVAL_MS, signal);
+      const response = await fetch(
+        apiUrl(`/api/download-jobs/${encodeURIComponent(currentJob.job_id)}`),
+        {
+          headers: { Accept: "application/json" },
+          signal
+        }
+      );
+      if (!response.ok) {
+        throw new Error(await readServerError(response));
+      }
+      currentJob = await response.json();
+    }
+
+    if (currentJob.status === "failed") {
+      throw new Error(currentJob.error?.message || "サーバーで動画を処理できませんでした。");
+    }
+    if (currentJob.status !== "ready") {
+      throw new Error("変換処理の状態を確認できませんでした。もう一度試してください。");
+    }
+    return currentJob;
+  }
+
+  async function downloadReadyFile(job, signal) {
+    const response = await fetch(
+      apiUrl(`/api/download-jobs/${encodeURIComponent(job.job_id)}/file`),
+      {
+        headers: {
+          Accept: "application/octet-stream, application/json"
+        },
+        signal
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(await readServerError(response));
+    }
+
+    const blob = await response.blob();
+    if (blob.size === 0) {
+      throw new Error("サーバーから空のファイルが返されました。もう一度試してください。");
+    }
+    return blob;
+  }
+
   async function downloadFromServer(validation) {
     requestController = new AbortController();
     setBusy(true);
@@ -203,29 +309,17 @@
     });
 
     try {
-      const response = await fetch(`${configuredApiBaseUrl}/api/download`, {
-        method: "POST",
-        headers: {
-          Accept: "application/octet-stream, application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          url: validation.url,
-          format: validation.format,
-          rights_confirmed: rightsCheckbox.checked
-        }),
-        signal: requestController.signal
+      const job = await createDownloadJob(validation, requestController.signal);
+      setStatus({
+        state: "busy",
+        kicker: "SERVER PROCESSING",
+        title: "動画を取得・変換しています",
+        message: "変換処理を受け付けました。サーバー側で完了するまでこの画面を開いておいてください。",
+        meta: "長い動画でも通信を切らずに処理します · Playlist・ログイン必須・DRM動画は非対応",
+        icon: "…"
       });
-
-      if (!response.ok) {
-        throw new Error(await readServerError(response));
-      }
-
-      const blob = await response.blob();
-      if (blob.size === 0) {
-        throw new Error("サーバーから空のファイルが返されました。もう一度試してください。");
-      }
-
+      const readyJob = await waitForDownloadJob(job, requestController.signal);
+      const blob = await downloadReadyFile(readyJob, requestController.signal);
       triggerBlobDownload(blob, fileNameForFormat(validation.format));
       setStatus({
         state: "success",
@@ -246,11 +340,14 @@
           icon: "—"
         });
       } else {
+        const message = error?.message === "Failed to fetch"
+          ? "変換サーバーに接続できません。少し待ってから再試行してください。"
+          : error?.message || "サーバーで動画を処理できませんでした。";
         setStatus({
           state: "error",
           kicker: "DOWNLOAD FAILED",
           title: "ダウンロードできませんでした",
-          message: error?.message || "サーバーで動画を処理できませんでした。",
+          message,
           meta: "ログイン情報や動画URLは保存していません。",
           icon: "!"
         });

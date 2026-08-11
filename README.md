@@ -29,6 +29,8 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 ルートの `Dockerfile` は、FFmpegを含むFastAPIサーバーを起動します。公開環境では、フロントエンドのGitHub Pagesから `ALLOWED_ORIGINS=https://adatchie.github.io` を設定したHTTPSのDockerホストへ接続します。
 
+ブラウザからの変換は、長時間の取得中にHTTPS接続が切れないよう `POST /api/download-jobs` で処理を開始し、`GET /api/download-jobs/{job_id}` で完了を確認してから `GET /api/download-jobs/{job_id}/file` でファイルを受け取ります。従来の `POST /api/download` も互換用に残しています。
+
 ```powershell
 docker build -t youtubedownloader .
 docker run --rm -p 10000:10000 -e PORT=10000 youtubedownloader

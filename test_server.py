@@ -1,9 +1,20 @@
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from server import RequestError, build_ytdlp_command, classify_downloader_error, find_output_file, validate_youtube_url
+from fastapi.testclient import TestClient
+
+from server import (
+    RequestError,
+    app,
+    build_ytdlp_command,
+    classify_downloader_error,
+    find_output_file,
+    validate_youtube_url,
+)
 
 
 class YouTubeUrlValidationTests(unittest.TestCase):
@@ -118,7 +129,59 @@ class OutputPathTests(unittest.TestCase):
                 with self.assertRaises(RequestError):
                     find_output_file(work_dir, f"{outside}\n")
             finally:
-                outside.unlink(missing_ok=True)
+                    outside.unlink(missing_ok=True)
+
+
+class AsyncDownloadJobTests(unittest.TestCase):
+    def test_job_is_accepted_before_long_worker_finishes_and_file_can_be_fetched(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        with tempfile.TemporaryDirectory() as directory:
+            work_dir = Path(directory)
+            output = work_dir / "audio.mp3"
+            output.write_bytes(b"mp3")
+
+            def fake_download_media(url, media_format, *, slot_acquired=False):
+                started.set()
+                release.wait(timeout=2)
+                return output, work_dir
+
+            try:
+                with patch("server.download_media", side_effect=fake_download_media):
+                    with TestClient(app) as client:
+                        response = client.post(
+                            "/api/download-jobs",
+                            json={
+                                "url": "https://youtu.be/BaW_jenozKc",
+                                "format": "mp3",
+                                "rights_confirmed": True,
+                            },
+                        )
+                        self.assertEqual(response.status_code, 202)
+                        job_id = response.json()["job_id"]
+                        self.assertTrue(started.wait(timeout=1))
+                        self.assertIn(
+                            client.get(f"/api/download-jobs/{job_id}").json()["status"],
+                            {"queued", "processing"},
+                        )
+
+                        release.set()
+                        deadline = time.monotonic() + 2
+                        status = ""
+                        while time.monotonic() < deadline:
+                            status = client.get(f"/api/download-jobs/{job_id}").json()["status"]
+                            if status == "ready":
+                                break
+                            time.sleep(0.01)
+                        self.assertEqual(status, "ready")
+
+                        file_response = client.get(f"/api/download-jobs/{job_id}/file")
+                        self.assertEqual(file_response.status_code, 200)
+                        self.assertEqual(file_response.content, b"mp3")
+                        self.assertEqual(file_response.headers["content-type"], "audio/mpeg")
+            finally:
+                release.set()
 
 
 if __name__ == "__main__":
