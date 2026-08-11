@@ -27,7 +27,7 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8000
 
 ## Docker / 公開
 
-ルートの `Dockerfile` は、FFmpegを含むFastAPIサーバーを起動します。公開環境では、フロントエンドのGitHub Pagesから `ALLOWED_ORIGINS=https://adatchie.github.io` を設定したHTTPSのDockerホストへ接続します。
+ルートの `Dockerfile` は、FFmpegと `bgutil-ytdlp-pot-provider` のHTTPサーバーを含むFastAPIサーバーを起動します。公開環境では、フロントエンドのGitHub Pagesから `ALLOWED_ORIGINS=https://adatchie.github.io` を設定したHTTPSのDockerホストへ接続します。
 
 ブラウザからの変換は、長時間の取得中にHTTPS接続が切れないよう `POST /api/download-jobs` で処理を開始し、`GET /api/download-jobs/{job_id}` で完了を確認してから `GET /api/download-jobs/{job_id}/file` でファイルを受け取ります。従来の `POST /api/download` も互換用に残しています。
 
@@ -38,7 +38,7 @@ docker run --rm -p 10000:10000 -e PORT=10000 youtubedownloader
 
 GitHub Pagesのデプロイにはリポジトリ変数 `MEDIA_API_BASE_URL`（例: `https://api.example.com`）が必要です。Pagesのworkflowがこの値を `api-config.js` に埋め込みます。APIの公開元はHTTPSのオリジンだけを指定してください。
 
-YouTube側の自動取得制限に対応する公開環境では、`bgutil-ytdlp-pot-provider` のHTTPサーバーを同じDockerネットワークで動かし、APIコンテナに `YTDLP_POT_PROVIDER_URL=http://bgutil-provider:4416` を設定します。これは取得制限を必ず回避するものではなく、動画の公開状態や利用許諾を判定する機能ではありません。
+Dockerイメージ内のProviderはAPIと同じコンテナで `127.0.0.1:4416` に起動し、APIから自動的に利用します。これは取得制限を必ず回避するものではなく、動画の公開状態や利用許諾を判定する機能ではありません。
 
 アプリケーションは動画URLをDBや作業ログへ保存しません。取得・変換中だけ一時ディレクトリを使い、レスポンス後に削除します。ホスティング基盤のアクセスログは別途そのサービスの設定に従います。
 

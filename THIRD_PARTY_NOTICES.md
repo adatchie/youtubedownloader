@@ -10,9 +10,9 @@
 
 ## bgutil-ytdlp-pot-provider 1.3.1
 
+- License: GPL-3.0-only
 - Upstream: https://github.com/Brainicism/bgutil-ytdlp-pot-provider
-- Use: YouTubeの自動取得制限に対応するためのPO Token Providerプラグイン
-- 配布時は上流プロジェクトの最新ライセンス表示も確認してください。
+- Use: YouTubeの自動取得制限に対応するためのPO Token ProviderプラグインとHTTPサーバー
 
 ## FastAPI 0.141.1 / Uvicorn 0.52.1
 
