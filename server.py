@@ -174,6 +174,8 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
         "2",
         "--fragment-retries",
         "2",
+        "--js-runtimes",
+        "node",
         "--extractor-args",
         "youtube:player_client=web_safari,web_embedded",
         "--max-filesize",
