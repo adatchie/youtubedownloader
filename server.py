@@ -45,6 +45,11 @@ YOUTUBE_HOSTS = frozenset(
         "www.youtu.be",
     }
 )
+YOUTUBE_PLAYER_CLIENTS = (
+    "web_safari,web_embedded",
+    "tv_embedded,android_vr",
+    "mweb",
+)
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
 DOWNLOAD_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_DOWNLOADS)
 RATE_LIMIT_LOCK = threading.Lock()
@@ -155,7 +160,13 @@ def enforce_rate_limit(client_key: str) -> None:
         history.append(now)
 
 
-def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str]:
+def build_ytdlp_command(
+    url: str,
+    media_format: str,
+    work_dir: Path,
+    *,
+    player_clients: str = YOUTUBE_PLAYER_CLIENTS[0],
+) -> list[str]:
     output_template = str(work_dir / "%(id)s.%(ext)s")
     command = [
         sys.executable,
@@ -177,7 +188,7 @@ def build_ytdlp_command(url: str, media_format: str, work_dir: Path) -> list[str
         "--js-runtimes",
         "node",
         "--extractor-args",
-        "youtube:player_client=web_safari,web_embedded",
+        f"youtube:player_client={player_clients}",
         "--max-filesize",
         "256M",
         "--print",
@@ -280,24 +291,40 @@ def download_media(
     work_dir: Path | None = None
     try:
         work_dir = Path(tempfile.mkdtemp(prefix="youtubedownloader-"))
-        command = build_ytdlp_command(url, media_format, work_dir)
-        completed = subprocess.run(
-            command,
-            cwd=work_dir,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=DOWNLOAD_TIMEOUT_SECONDS,
-            check=False,
-        )
-        if completed.returncode != 0:
-            code, message = classify_downloader_error(completed.stderr)
-            LOGGER.warning("yt-dlp failed: returncode=%s code=%s", completed.returncode, code)
-            raise RequestError(code, message, 502)
+        deadline = time.monotonic() + DOWNLOAD_TIMEOUT_SECONDS
+        for attempt, player_clients in enumerate(YOUTUBE_PLAYER_CLIENTS):
+            command = build_ytdlp_command(
+                url,
+                media_format,
+                work_dir,
+                player_clients=player_clients,
+            )
+            remaining_timeout = max(1, int(deadline - time.monotonic()))
+            completed = subprocess.run(
+                command,
+                cwd=work_dir,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=remaining_timeout,
+                check=False,
+            )
+            if completed.returncode == 0:
+                output_path = find_output_file(work_dir, completed.stdout)
+                break
 
-        output_path = find_output_file(work_dir, completed.stdout)
+            code, message = classify_downloader_error(completed.stderr)
+            if code != "youtube-bot-check" or attempt == len(YOUTUBE_PLAYER_CLIENTS) - 1:
+                LOGGER.warning("yt-dlp failed: returncode=%s code=%s", completed.returncode, code)
+                raise RequestError(code, message, 502)
+
+            LOGGER.warning(
+                "yt-dlp bot check: retrying with player_client=%s",
+                YOUTUBE_PLAYER_CLIENTS[attempt + 1],
+            )
+
         if output_path.stat().st_size > MAX_FILE_BYTES:
             raise RequestError(
                 "output-too-large",

@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -12,6 +14,7 @@ from server import (
     app,
     build_ytdlp_command,
     classify_downloader_error,
+    download_media,
     find_output_file,
     validate_youtube_url,
 )
@@ -111,6 +114,53 @@ class DownloaderCommandTests(unittest.TestCase):
         code, message = classify_downloader_error("Sign in to confirm you're not a bot")
         self.assertEqual(code, "youtube-bot-check")
         self.assertIn("時間を置いて", message)
+
+    def test_bot_check_retries_with_fallback_player_client(self):
+        calls = []
+
+        def fake_run(command, **_):
+            calls.append(command)
+            if len(calls) == 1:
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    stdout="",
+                    stderr="Sign in to confirm you're not a bot",
+                )
+
+            output_template = command[command.index("--output") + 1]
+            output_path = Path(
+                output_template.replace("%(id)s", "BaW_jenozKc").replace("%(ext)s", "mp3")
+            )
+            output_path.write_bytes(b"audio")
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=f"{output_path}\n",
+                stderr="",
+            )
+
+        work_dir = None
+        try:
+            with patch("server.subprocess.run", side_effect=fake_run):
+                output_path, work_dir = download_media(
+                    "https://www.youtube.com/watch?v=BaW_jenozKc",
+                    "mp3",
+                )
+        finally:
+            if work_dir is not None:
+                shutil.rmtree(work_dir, ignore_errors=True)
+
+        self.assertEqual(len(calls), 2)
+        self.assertIn(
+            "youtube:player_client=web_safari,web_embedded",
+            calls[0],
+        )
+        self.assertIn(
+            "youtube:player_client=tv_embedded,android_vr",
+            calls[1],
+        )
+        self.assertTrue(output_path.name.endswith(".mp3"))
 
 
 class OutputPathTests(unittest.TestCase):
