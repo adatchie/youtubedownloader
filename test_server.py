@@ -73,7 +73,7 @@ class DownloaderCommandTests(unittest.TestCase):
         self.assertIsInstance(command, list)
         self.assertIn("--no-playlist", command)
         extractor_args_index = command.index("--extractor-args")
-        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=tv_embedded,android_vr")
+        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=web_safari,web_embedded")
         self.assertTrue(any("[height<=720]" in argument for argument in command))
         self.assertIn("--merge-output-format", command)
         self.assertEqual(command[-1], "https://www.youtube.com/watch?v=BaW_jenozKc")
