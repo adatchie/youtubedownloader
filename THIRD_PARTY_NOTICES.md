@@ -14,6 +14,12 @@
 - Upstream: https://github.com/Brainicism/bgutil-ytdlp-pot-provider
 - Use: YouTubeの自動取得制限に対応するためのPO Token ProviderプラグインとHTTPサーバー
 
+## yt-dlp-ejs 0.8.0
+
+- License: Unlicense
+- Upstream: https://github.com/yt-dlp/ejs
+- Use: yt-dlpがYouTubeのJavaScriptチャレンジを解くためのNode.js用スクリプト
+
 ## FastAPI 0.141.1 / Uvicorn 0.52.1
 
 - FastAPI: MIT License
