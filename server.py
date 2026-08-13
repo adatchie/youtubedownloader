@@ -187,6 +187,8 @@ def build_ytdlp_command(
         "2",
         "--js-runtimes",
         "node",
+        "--remote-components",
+        "ejs:github",
         "--extractor-args",
         f"youtube:player_client={player_clients}",
         "--max-filesize",

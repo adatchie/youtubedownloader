@@ -77,6 +77,8 @@ class DownloaderCommandTests(unittest.TestCase):
         self.assertIn("--no-playlist", command)
         js_runtime_index = command.index("--js-runtimes")
         self.assertEqual(command[js_runtime_index + 1], "node")
+        remote_components_index = command.index("--remote-components")
+        self.assertEqual(command[remote_components_index + 1], "ejs:github")
         extractor_args_index = command.index("--extractor-args")
         self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=web_embedded")
         self.assertTrue(any("[height<=720]" in argument for argument in command))
