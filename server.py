@@ -46,8 +46,8 @@ YOUTUBE_HOSTS = frozenset(
     }
 )
 YOUTUBE_PLAYER_CLIENTS = (
-    "web_safari,web_embedded",
-    "tv_embedded,android_vr",
+    "web_embedded",
+    "android_vr,android",
     "mweb",
 )
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,32}$")

@@ -78,7 +78,7 @@ class DownloaderCommandTests(unittest.TestCase):
         js_runtime_index = command.index("--js-runtimes")
         self.assertEqual(command[js_runtime_index + 1], "node")
         extractor_args_index = command.index("--extractor-args")
-        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=web_safari,web_embedded")
+        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=web_embedded")
         self.assertTrue(any("[height<=720]" in argument for argument in command))
         self.assertIn("--merge-output-format", command)
         self.assertEqual(command[-1], "https://www.youtube.com/watch?v=BaW_jenozKc")
@@ -153,11 +153,11 @@ class DownloaderCommandTests(unittest.TestCase):
 
         self.assertEqual(len(calls), 2)
         self.assertIn(
-            "youtube:player_client=web_safari,web_embedded",
+            "youtube:player_client=web_embedded",
             calls[0],
         )
         self.assertIn(
-            "youtube:player_client=tv_embedded,android_vr",
+            "youtube:player_client=android_vr,android",
             calls[1],
         )
         self.assertTrue(output_path.name.endswith(".mp3"))
