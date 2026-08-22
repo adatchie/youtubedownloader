@@ -1,4 +1,4 @@
-FROM brainicism/bgutil-ytdlp-pot-provider:1.3.1-node AS bgutil-provider
+FROM brainicism/bgutil-ytdlp-pot-provider:1.3.2-node AS bgutil-provider
 
 FROM python:3.13-slim
 

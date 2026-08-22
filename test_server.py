@@ -14,6 +14,7 @@ from server import (
     app,
     build_ytdlp_command,
     classify_downloader_error,
+    YOUTUBE_PLAYER_CLIENTS,
     download_media,
     find_output_file,
     validate_youtube_url,
@@ -80,7 +81,7 @@ class DownloaderCommandTests(unittest.TestCase):
         remote_components_index = command.index("--remote-components")
         self.assertEqual(command[remote_components_index + 1], "ejs:github")
         extractor_args_index = command.index("--extractor-args")
-        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=web_embedded")
+        self.assertEqual(command[extractor_args_index + 1], "youtube:player_client=default")
         self.assertTrue(any("[height<=720]" in argument for argument in command))
         self.assertIn("--merge-output-format", command)
         self.assertEqual(command[-1], "https://www.youtube.com/watch?v=BaW_jenozKc")
@@ -117,17 +118,26 @@ class DownloaderCommandTests(unittest.TestCase):
         self.assertEqual(code, "youtube-bot-check")
         self.assertIn("時間を置いて", message)
 
-    def test_bot_check_retries_with_fallback_player_client(self):
+    def test_classifies_media_download_failure_as_retryable(self):
+        code, message = classify_downloader_error("ERROR: unable to download video data: HTTP Error 403: Forbidden")
+        self.assertEqual(code, "media-forbidden")
+        self.assertIn("形式", message)
+
+    def test_recoverable_extraction_errors_retry_with_fallback_player_client(self):
         calls = []
 
         def fake_run(command, **_):
             calls.append(command)
-            if len(calls) == 1:
+            if len(calls) < len(YOUTUBE_PLAYER_CLIENTS):
                 return subprocess.CompletedProcess(
                     command,
                     1,
                     stdout="",
-                    stderr="Sign in to confirm you're not a bot",
+                    stderr=(
+                        "Sign in to confirm you're not a bot"
+                        if len(calls) == 1
+                        else "ERROR: Requested format is not available"
+                    ),
                 )
 
             output_template = command[command.index("--output") + 1]
@@ -153,15 +163,16 @@ class DownloaderCommandTests(unittest.TestCase):
             if work_dir is not None:
                 shutil.rmtree(work_dir, ignore_errors=True)
 
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertIn(
-            "youtube:player_client=web_embedded",
+            "youtube:player_client=default",
             calls[0],
         )
         self.assertIn(
-            "youtube:player_client=android_vr,android",
+            "youtube:player_client=android_vr",
             calls[1],
         )
+        self.assertIn("youtube:player_client=mweb", calls[2])
         self.assertTrue(output_path.name.endswith(".mp3"))
 
 
