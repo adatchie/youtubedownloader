@@ -46,8 +46,8 @@ YOUTUBE_HOSTS = frozenset(
     }
 )
 YOUTUBE_PLAYER_CLIENTS = (
-    "web_embedded",
-    "android_vr,android",
+    "default",
+    "android_vr",
     "mweb",
 )
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
@@ -165,8 +165,9 @@ def build_ytdlp_command(
     media_format: str,
     work_dir: Path,
     *,
-    player_clients: str = YOUTUBE_PLAYER_CLIENTS[0],
+    player_clients: str | None = None,
 ) -> list[str]:
+    selected_clients = player_clients or YOUTUBE_PLAYER_CLIENTS[0]
     output_template = str(work_dir / "%(id)s.%(ext)s")
     command = [
         sys.executable,
@@ -190,7 +191,7 @@ def build_ytdlp_command(
         "--remote-components",
         "ejs:github",
         "--extractor-args",
-        f"youtube:player_client={player_clients}",
+        f"youtube:player_client={selected_clients}",
         "--max-filesize",
         "256M",
         "--print",
@@ -212,7 +213,7 @@ def build_ytdlp_command(
         command.extend(
             [
                 "--format",
-                "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]",
+                "bv*[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]/bv*+ba/b",
                 "--merge-output-format",
                 "mp4",
                 "--remux-video",
@@ -240,6 +241,8 @@ def build_ytdlp_command(
 
 def classify_downloader_error(stderr: str) -> tuple[str, str]:
     message = stderr.lower()
+    if "http error 403" in message:
+        return "media-forbidden", "選択した形式をYouTube側が許可しませんでした。別の形式で再試行してください。"
     if "confirm you're not a bot" in message or "confirm you’re not a bot" in message:
         return "youtube-bot-check", "YouTube側の自動取得制限により処理できませんでした。時間を置いて再試行してください。"
     if "private video" in message or "sign in" in message or "login" in message:
@@ -248,7 +251,7 @@ def classify_downloader_error(stderr: str) -> tuple[str, str]:
         return "drm-video", "DRMで保護された動画には対応していません。"
     if "playlist" in message and "video" not in message:
         return "playlist-not-supported", "Playlistではなく、1本の動画ページURLを指定してください。"
-    if "requested format is not available" in message:
+    if "requested format is not available" in message or "unable to download video data" in message:
         return "format-unavailable", "この動画では選択した形式を作成できません。"
     return "download-failed", "動画を取得できませんでした。公開状態とURLを確認してください。"
 
@@ -318,12 +321,14 @@ def download_media(
                 break
 
             code, message = classify_downloader_error(completed.stderr)
-            if code != "youtube-bot-check" or attempt == len(YOUTUBE_PLAYER_CLIENTS) - 1:
+            should_retry = code in {"youtube-bot-check", "format-unavailable", "media-forbidden"}
+            if not should_retry or attempt == len(YOUTUBE_PLAYER_CLIENTS) - 1:
                 LOGGER.warning("yt-dlp failed: returncode=%s code=%s", completed.returncode, code)
                 raise RequestError(code, message, 502)
 
             LOGGER.warning(
-                "yt-dlp bot check: retrying with player_client=%s",
+                "yt-dlp %s: retrying with player_client=%s",
+                code,
                 YOUTUBE_PLAYER_CLIENTS[attempt + 1],
             )
 
